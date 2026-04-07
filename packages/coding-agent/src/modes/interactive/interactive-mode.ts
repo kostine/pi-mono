@@ -193,6 +193,7 @@ export class InteractiveMode {
 
 	// Working message visibility state
 	private hideWorkingMessage = false;
+	private borderPulseInterval: NodeJS.Timeout | undefined = undefined;
 
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
@@ -2309,6 +2310,8 @@ export class InteractiveMode {
 						this.defaultWorkingMessage,
 					);
 					this.statusContainer.addChild(this.loadingAnimation);
+				} else {
+					this.startBorderPulse();
 				}
 				// Apply any pending working message queued before loader existed
 				if (this.loadingAnimation && this.pendingWorkingMessage !== undefined) {
@@ -2468,6 +2471,8 @@ export class InteractiveMode {
 					this.loadingAnimation = undefined;
 					this.statusContainer.clear();
 				}
+				this.stopBorderPulse();
+				this.updateEditorBorderColor();
 				if (this.streamingComponent) {
 					this.chatContainer.removeChild(this.streamingComponent);
 					this.streamingComponent = undefined;
@@ -2945,6 +2950,27 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	private startBorderPulse(): void {
+		this.stopBorderPulse();
+		const baseBorderColor = this.editor.borderColor;
+		const dimBorderColor = (str: string) => theme.fg("borderMuted", str);
+		let frame = 0;
+		this.borderPulseInterval = setInterval(() => {
+			// Sine wave pulse: smoothly alternate between dim and bright
+			const t = (Math.sin(frame * 0.15) + 1) / 2; // 0..1
+			this.editor.borderColor = t > 0.5 ? baseBorderColor : dimBorderColor;
+			frame++;
+			this.ui.requestRender();
+		}, 80);
+	}
+
+	private stopBorderPulse(): void {
+		if (this.borderPulseInterval) {
+			clearInterval(this.borderPulseInterval);
+			this.borderPulseInterval = undefined;
+		}
+	}
+
 	private cycleThinkingLevel(): void {
 		const newLevel = this.session.cycleThinkingLevel();
 		if (newLevel === undefined) {
@@ -3415,7 +3441,10 @@ export class InteractiveMode {
 							this.loadingAnimation.stop();
 							this.loadingAnimation = undefined;
 							this.statusContainer.clear();
-							this.ui.requestRender();
+							this.startBorderPulse();
+						} else if (!hidden) {
+							this.stopBorderPulse();
+							this.updateEditorBorderColor();
 						}
 					},
 					onCollapseChangelogChange: (collapsed) => {
