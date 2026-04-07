@@ -69,6 +69,7 @@ I regularly publish my own `pi-mono` work sessions here:
   - [Themes](#themes)
   - [Pi Packages](#pi-packages)
 - [Programmatic Usage](#programmatic-usage)
+- [Micro Mode](#micro-mode)
 - [Philosophy](#philosophy)
 - [CLI Reference](#cli-reference)
 
@@ -439,6 +440,140 @@ See [docs/rpc.md](docs/rpc.md) for the protocol.
 
 ---
 
+## Micro Mode
+
+Micro mode strips pi's TUI down to a compact layout for running in small tmux panes, as a visual subagent, or in space-constrained environments.
+
+```bash
+pi --micro
+```
+
+By default, micro mode hides the header, chat messages, pending messages, and status area. It keeps the editor, widgets, and footer visible. The editor accepts input via `tmux send-keys`, and extensions can display status through widgets (`setWidget`) and the footer (`setStatus`, `setFooter`).
+
+### Layout Sections
+
+| Section | Default (micro) | Description |
+|---------|-----------------|-------------|
+| `header` | hidden | Logo, keybindings, changelog |
+| `chat` | hidden | User/assistant messages, tool results |
+| `pending` | hidden | Queued follow-up messages |
+| `status` | hidden | Working indicator, compaction loader |
+| `widget-above` | **visible** | Extension widgets above editor |
+| `editor` | **visible** | Input editor |
+| `widget-below` | **visible** | Extension widgets below editor |
+| `footer` | **visible** | Model info, token stats, git branch |
+
+### Overriding Defaults
+
+Use `--micro-show` and `--micro-hide` with comma-separated section names:
+
+```bash
+# Show chat alongside the compact layout
+pi --micro --micro-show chat
+
+# Hide footer for a minimal widget-only view
+pi --micro --micro-hide footer
+
+# Show chat and status, hide editor (fully programmatic)
+pi --micro --micro-show chat,status --micro-hide editor
+```
+
+### RPC Socket
+
+The `--socket` flag opens a unix socket alongside the TUI that accepts the full [RPC protocol](docs/rpc.md). This gives you structured programmatic control while the TUI renders visually in the pane. It works with or without `--micro`.
+
+```bash
+pi --socket              # full TUI + programmatic control
+pi --micro --socket      # compact TUI + programmatic control
+pi --micro               # compact TUI, send-keys only
+```
+
+The socket path is written to a discovery file at `/tmp/pi-socket-<pid>.json`:
+
+```json
+{"pid": 12345, "socketPath": "/tmp/pi-socket-12345.sock", "startedAt": "2026-04-07T..."}
+```
+
+Send commands using any unix socket client:
+
+```bash
+# Get current state
+echo '{"type":"get_state"}' | nc -U /tmp/pi-socket-12345.sock
+
+# Send a prompt
+echo '{"type":"prompt","message":"fix the build"}' | nc -U /tmp/pi-socket-12345.sock
+
+# Abort current operation
+echo '{"type":"abort"}' | nc -U /tmp/pi-socket-12345.sock
+```
+
+From Node.js:
+
+```javascript
+const net = require('net');
+const sock = net.connect('/tmp/pi-socket-12345.sock');
+sock.write(JSON.stringify({ type: 'prompt', message: 'fix the build' }) + '\n');
+sock.on('data', (chunk) => {
+  // Receives RPC responses and agent events as JSONL
+});
+```
+
+All RPC commands work over the socket: `prompt`, `steer`, `follow_up`, `abort`, `get_state`, `get_messages`, `set_model`, `compact`, and more. Agent events (streaming, tool execution, completion) are broadcast to all connected clients. See [docs/rpc.md](docs/rpc.md) for the full protocol.
+
+#### Discovery from Extensions
+
+Extensions and child processes can detect micro mode and the socket path via environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `PI_MICRO` | Set to `"1"` when `--micro` is active |
+| `PI_SOCKET` | Set to `"1"` when `--socket` is active |
+| `PI_SOCKET_PATH` | Socket path when `--socket` is active |
+
+```typescript
+pi.on("session_start", async (_event, ctx) => {
+  const socketPath = process.env.PI_SOCKET_PATH;
+  const isMicro = process.env.PI_MICRO === "1";
+  if (isMicro && socketPath) {
+    ctx.ui.setStatus("mode", "micro + socket");
+  }
+});
+```
+
+These are per-process — they don't leak across tmux panes or persist after pi exits.
+
+### Subagent Usage with tmux
+
+Micro mode is designed for running pi as a subagent in a tmux pane, controlled by a main agent:
+
+```bash
+# Create a small pane and start pi in micro mode
+tmux split-window -h -l 60
+tmux send-keys 'pi --micro --socket --no-skills --tools read,bash' Enter
+
+# Option 1: Send prompts via send-keys (simple, works with editor visible)
+tmux send-keys 'fix the failing test in auth.test.ts' Enter
+
+# Option 2: Send prompts via RPC socket (structured, reliable)
+SOCK=$(jq -r .socketPath /tmp/pi-socket-$(pgrep -f 'pi --micro').json)
+echo '{"type":"prompt","message":"fix the failing test"}' | nc -U "$SOCK"
+```
+
+Combine with existing flags to control capabilities:
+
+| Flag | Purpose |
+|------|---------|
+| `--tools read,bash` | Restrict available tools |
+| `--no-tools` | Disable built-in tools (extension tools still work) |
+| `--no-skills` | Disable skill loading |
+| `--models <patterns>` | Restrict model selection |
+| `--system-prompt <text>` | Custom system prompt for the subagent |
+| `--no-session` | Ephemeral mode (don't persist) |
+
+Extensions have full access to the widget and footer APIs in micro mode, so a companion extension can build a compact status dashboard showing task progress, tool activity, and results without the full chat interface.
+
+---
+
 ## Philosophy
 
 Pi is aggressively extensible so it doesn't have to dictate your workflow. Features that other tools bake in can be built with [extensions](#extensions), [skills](#skills), or installed from third-party [pi packages](#pi-packages). This keeps the core minimal while letting you shape pi to fit how you work.
@@ -484,6 +619,8 @@ pi config                    # Enable/disable package resources
 | `-p`, `--print` | Print response and exit |
 | `--mode json` | Output all events as JSON lines (see [docs/json.md](docs/json.md)) |
 | `--mode rpc` | RPC mode for process integration (see [docs/rpc.md](docs/rpc.md)) |
+| `--micro` | Compact TUI for subagents and small panes (see [Micro Mode](#micro-mode)) |
+| `--socket` | RPC socket alongside the TUI (see [Micro Mode > RPC Socket](#rpc-socket)) |
 | `--export <in> [out]` | Export session to HTML |
 
 In print mode, pi also reads piped stdin and merges it into the initial prompt:
@@ -545,6 +682,10 @@ Combine `--no-*` with explicit flags to load exactly what you need, ignoring set
 | `--system-prompt <text>` | Replace default prompt (context files and skills still appended) |
 | `--append-system-prompt <text>` | Append to system prompt |
 | `--verbose` | Force verbose startup |
+| `--micro` | Compact TUI mode (see [Micro Mode](#micro-mode)) |
+| `--micro-show <sections>` | Show additional sections in micro mode |
+| `--micro-hide <sections>` | Hide sections in micro mode |
+| `--socket` | Open RPC socket alongside the TUI (see [Micro Mode > RPC Socket](#rpc-socket)) |
 | `-h`, `--help` | Show help |
 | `-v`, `--version` | Show version |
 
@@ -598,6 +739,9 @@ pi --thinking high "Solve this complex problem"
 | `PI_SKIP_VERSION_CHECK` | Skip version check at startup |
 | `PI_CACHE_RETENTION` | Set to `long` for extended prompt cache (Anthropic: 1h, OpenAI: 24h) |
 | `VISUAL`, `EDITOR` | External editor for Ctrl+G |
+| `PI_MICRO` | Set to `"1"` when `--micro` is active (read-only, set by pi) |
+| `PI_SOCKET` | Set to `"1"` when `--socket` is active (read-only, set by pi) |
+| `PI_SOCKET_PATH` | Socket path when `--socket` is active (read-only, set by pi) |
 
 ---
 
