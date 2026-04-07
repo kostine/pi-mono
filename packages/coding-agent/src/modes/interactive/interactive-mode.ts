@@ -98,6 +98,7 @@ import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { TreeSelectorComponent } from "./components/tree-selector.js";
 import { UserMessageComponent } from "./components/user-message.js";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.js";
+import { type MicroSocketServer, startMicroSocket } from "./micro-socket.js";
 import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
@@ -130,6 +131,57 @@ type CompactionQueuedMessage = {
 };
 
 /**
+ * Layout sections that can be toggled in micro mode.
+ */
+export type MicroSection =
+	| "header"
+	| "chat"
+	| "pending"
+	| "status"
+	| "widget-above"
+	| "editor"
+	| "widget-below"
+	| "footer";
+
+const ALL_MICRO_SECTIONS: readonly MicroSection[] = [
+	"header",
+	"chat",
+	"pending",
+	"status",
+	"widget-above",
+	"editor",
+	"widget-below",
+	"footer",
+];
+
+/**
+ * Default visible sections in micro mode: editor, widgets, and footer.
+ */
+const MICRO_DEFAULT_VISIBLE: ReadonlySet<MicroSection> = new Set(["widget-above", "editor", "widget-below", "footer"]);
+
+/**
+ * Resolve micro mode section visibility from CLI args.
+ */
+export function resolveMicroSections(show?: string[], hide?: string[]): Set<MicroSection> {
+	const visible = new Set<MicroSection>(MICRO_DEFAULT_VISIBLE);
+	if (show) {
+		for (const s of show) {
+			if (ALL_MICRO_SECTIONS.includes(s as MicroSection)) {
+				visible.add(s as MicroSection);
+			}
+		}
+	}
+	if (hide) {
+		for (const s of hide) {
+			if (ALL_MICRO_SECTIONS.includes(s as MicroSection)) {
+				visible.delete(s as MicroSection);
+			}
+		}
+	}
+	return visible;
+}
+
+/**
  * Options for InteractiveMode initialization.
  */
 export interface InteractiveModeOptions {
@@ -145,6 +197,10 @@ export interface InteractiveModeOptions {
 	initialMessages?: string[];
 	/** Force verbose startup (overrides quietStartup setting) */
 	verbose?: boolean;
+	/** Micro mode: set of visible layout sections. When defined, unlisted sections are hidden. */
+	microSections?: Set<MicroSection>;
+	/** Enable RPC socket side-channel alongside the TUI. */
+	socket?: boolean;
 }
 
 export class InteractiveMode {
@@ -250,6 +306,17 @@ export class InteractiveMode {
 	// Custom header from extension (undefined = use built-in header)
 	private customHeader: (Component & { dispose?(): void }) | undefined = undefined;
 
+	// Micro mode: which sections are visible (undefined = all visible, normal mode)
+	private microSections: Set<MicroSection> | undefined = undefined;
+
+	// Micro mode socket server for RPC side-channel
+	private microSocket: MicroSocketServer | undefined = undefined;
+
+	/** Returns true if a layout section is visible (always true in normal mode). */
+	private isSectionVisible(section: MicroSection): boolean {
+		return !this.microSections || this.microSections.has(section);
+	}
+
 	// Convenience accessors
 	private get session(): AgentSession {
 		return this.runtimeHost.session;
@@ -296,6 +363,9 @@ export class InteractiveMode {
 		// Load hide thinking block setting
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
 		this.hideWorkingMessage = this.settingsManager.getHideWorkingMessage();
+
+		// Micro mode
+		this.microSections = options.microSections;
 
 		// Register themes from resource loader and initialize
 		setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
@@ -446,10 +516,12 @@ export class InteractiveMode {
 		this.fdPath = fdPath;
 
 		// Add header container as first child
-		this.ui.addChild(this.headerContainer);
+		if (this.isSectionVisible("header")) {
+			this.ui.addChild(this.headerContainer);
+		}
 
 		// Add header with keybindings from config (unless silenced)
-		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
+		if (this.isSectionVisible("header") && (this.options.verbose || !this.settingsManager.getQuietStartup())) {
 			const logo = theme.bold(theme.fg("accent", APP_NAME)) + theme.fg("dim", ` v${this.version}`);
 
 			// Build startup instructions using keybinding hint helpers
@@ -505,7 +577,7 @@ export class InteractiveMode {
 				}
 				this.headerContainer.addChild(new DynamicBorder());
 			}
-		} else {
+		} else if (this.isSectionVisible("header")) {
 			// Minimal header when silenced
 			this.builtInHeader = new Text("", 0, 0);
 			this.headerContainer.addChild(this.builtInHeader);
@@ -519,14 +591,28 @@ export class InteractiveMode {
 			}
 		}
 
-		this.ui.addChild(this.chatContainer);
-		this.ui.addChild(this.pendingMessagesContainer);
-		this.ui.addChild(this.statusContainer);
+		if (this.isSectionVisible("chat")) {
+			this.ui.addChild(this.chatContainer);
+		}
+		if (this.isSectionVisible("pending")) {
+			this.ui.addChild(this.pendingMessagesContainer);
+		}
+		if (this.isSectionVisible("status")) {
+			this.ui.addChild(this.statusContainer);
+		}
 		this.renderWidgets(); // Initialize with default spacer
-		this.ui.addChild(this.widgetContainerAbove);
-		this.ui.addChild(this.editorContainer);
-		this.ui.addChild(this.widgetContainerBelow);
-		this.ui.addChild(this.footer);
+		if (this.isSectionVisible("widget-above")) {
+			this.ui.addChild(this.widgetContainerAbove);
+		}
+		if (this.isSectionVisible("editor")) {
+			this.ui.addChild(this.editorContainer);
+		}
+		if (this.isSectionVisible("widget-below")) {
+			this.ui.addChild(this.widgetContainerBelow);
+		}
+		if (this.isSectionVisible("footer")) {
+			this.ui.addChild(this.footer);
+		}
 		this.ui.setFocus(this.editor);
 
 		this.setupKeyHandlers();
@@ -540,7 +626,9 @@ export class InteractiveMode {
 		await this.bindCurrentSessionExtensions();
 
 		// Render initial messages AFTER showing loaded resources
-		this.renderInitialMessages();
+		if (this.isSectionVisible("chat")) {
+			this.renderInitialMessages();
+		}
 
 		// Set terminal title
 		this.updateTerminalTitle();
@@ -559,6 +647,18 @@ export class InteractiveMode {
 		this.footerDataProvider.onBranchChange(() => {
 			this.ui.requestRender();
 		});
+
+		// Set environment variables for extensions and child processes
+		if (this.microSections) {
+			process.env.PI_MICRO = "1";
+		}
+
+		// Start RPC socket side-channel
+		if (this.options.socket) {
+			this.microSocket = startMicroSocket(this.runtimeHost);
+			process.env.PI_SOCKET = "1";
+			process.env.PI_SOCKET_PATH = this.microSocket.socketPath;
+		}
 
 		// Initialize available provider count for footer display
 		await this.updateAvailableProviderCount();
@@ -1010,6 +1110,9 @@ export class InteractiveMode {
 		force?: boolean;
 		showDiagnosticsWhenQuiet?: boolean;
 	}): void {
+		if (!this.isSectionVisible("chat")) {
+			return;
+		}
 		const showListing = options?.force || this.options.verbose || !this.settingsManager.getQuietStartup();
 		const showDiagnostics = showListing || options?.showDiagnosticsWhenQuiet === true;
 		if (!showListing && !showDiagnostics) {
@@ -2020,7 +2123,7 @@ export class InteractiveMode {
 		// Set up handlers on defaultEditor - they use this.editor for text access
 		// so they work correctly regardless of which editor is active
 		this.defaultEditor.onEscape = () => {
-			if (this.loadingAnimation) {
+			if (this.loadingAnimation || this.session.isStreaming) {
 				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.session.isBashRunning) {
 				this.session.abortBash();
@@ -4725,6 +4828,10 @@ export class InteractiveMode {
 		this.footerDataProvider.dispose();
 		if (this.unsubscribe) {
 			this.unsubscribe();
+		}
+		if (this.microSocket) {
+			this.microSocket.close();
+			this.microSocket = undefined;
 		}
 		if (this.isInitialized) {
 			this.ui.stop();
