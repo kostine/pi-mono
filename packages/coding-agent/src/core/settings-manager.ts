@@ -73,6 +73,7 @@ export interface Settings {
 	branchSummary?: BranchSummarySettings;
 	retry?: RetrySettings;
 	hideThinkingBlock?: boolean;
+	hideWorkingMessage?: boolean;
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
 	quietStartup?: boolean;
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
@@ -683,6 +684,16 @@ export class SettingsManager {
 	setHideThinkingBlock(hide: boolean): void {
 		this.globalSettings.hideThinkingBlock = hide;
 		this.markModified("hideThinkingBlock");
+		this.save();
+	}
+
+	getHideWorkingMessage(): boolean {
+		return this.settings.hideWorkingMessage ?? false;
+	}
+
+	setHideWorkingMessage(hide: boolean): void {
+		this.globalSettings.hideWorkingMessage = hide;
+		this.markModified("hideWorkingMessage");
 		this.save();
 	}
 

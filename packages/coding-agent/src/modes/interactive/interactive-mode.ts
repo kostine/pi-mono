@@ -191,6 +191,9 @@ export class InteractiveMode {
 	// Thinking block visibility state
 	private hideThinkingBlock = false;
 
+	// Working message visibility state
+	private hideWorkingMessage = false;
+
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
 
@@ -289,6 +292,7 @@ export class InteractiveMode {
 
 		// Load hide thinking block setting
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
+		this.hideWorkingMessage = this.settingsManager.getHideWorkingMessage();
 
 		// Register themes from resource loader and initialize
 		setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
@@ -1261,6 +1265,7 @@ export class InteractiveMode {
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerDataProvider.setCwd(this.sessionManager.getCwd());
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
+		this.hideWorkingMessage = this.settingsManager.getHideWorkingMessage();
 		this.ui.setShowHardwareCursor(this.settingsManager.getShowHardwareCursor());
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
 		const editorPaddingX = this.settingsManager.getEditorPaddingX();
@@ -2296,15 +2301,17 @@ export class InteractiveMode {
 					this.loadingAnimation.stop();
 				}
 				this.statusContainer.clear();
-				this.loadingAnimation = new Loader(
-					this.ui,
-					(spinner) => theme.fg("accent", spinner),
-					(text) => theme.fg("muted", text),
-					this.defaultWorkingMessage,
-				);
-				this.statusContainer.addChild(this.loadingAnimation);
+				if (!this.hideWorkingMessage) {
+					this.loadingAnimation = new Loader(
+						this.ui,
+						(spinner) => theme.fg("accent", spinner),
+						(text) => theme.fg("muted", text),
+						this.defaultWorkingMessage,
+					);
+					this.statusContainer.addChild(this.loadingAnimation);
+				}
 				// Apply any pending working message queued before loader existed
-				if (this.pendingWorkingMessage !== undefined) {
+				if (this.loadingAnimation && this.pendingWorkingMessage !== undefined) {
 					if (this.pendingWorkingMessage) {
 						this.loadingAnimation.setMessage(this.pendingWorkingMessage);
 					}
