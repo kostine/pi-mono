@@ -193,7 +193,8 @@ export class InteractiveMode {
 
 	// Working message visibility state
 	private hideWorkingMessage = false;
-	private borderPulseInterval: NodeJS.Timeout | undefined = undefined;
+	private cursorAnimationInterval: NodeJS.Timeout | undefined = undefined;
+	private readonly spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
@@ -2311,7 +2312,7 @@ export class InteractiveMode {
 					);
 					this.statusContainer.addChild(this.loadingAnimation);
 				} else {
-					this.startBorderPulse();
+					this.startCursorAnimation();
 				}
 				// Apply any pending working message queued before loader existed
 				if (this.loadingAnimation && this.pendingWorkingMessage !== undefined) {
@@ -2471,8 +2472,7 @@ export class InteractiveMode {
 					this.loadingAnimation = undefined;
 					this.statusContainer.clear();
 				}
-				this.stopBorderPulse();
-				this.updateEditorBorderColor();
+				this.stopCursorAnimation();
 				if (this.streamingComponent) {
 					this.chatContainer.removeChild(this.streamingComponent);
 					this.streamingComponent = undefined;
@@ -2950,25 +2950,23 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private startBorderPulse(): void {
-		this.stopBorderPulse();
-		const baseBorderColor = this.editor.borderColor;
-		const dimBorderColor = (str: string) => theme.fg("borderMuted", str);
+	private startCursorAnimation(): void {
+		this.stopCursorAnimation();
 		let frame = 0;
-		this.borderPulseInterval = setInterval(() => {
-			// Sine wave pulse: smoothly alternate between dim and bright
-			const t = (Math.sin(frame * 0.15) + 1) / 2; // 0..1
-			this.editor.borderColor = t > 0.5 ? baseBorderColor : dimBorderColor;
-			frame++;
+		this.editor.cursorOverride = theme.fg("accent", this.spinnerFrames[0]);
+		this.cursorAnimationInterval = setInterval(() => {
+			frame = (frame + 1) % this.spinnerFrames.length;
+			this.editor.cursorOverride = theme.fg("accent", this.spinnerFrames[frame]);
 			this.ui.requestRender();
 		}, 80);
 	}
 
-	private stopBorderPulse(): void {
-		if (this.borderPulseInterval) {
-			clearInterval(this.borderPulseInterval);
-			this.borderPulseInterval = undefined;
+	private stopCursorAnimation(): void {
+		if (this.cursorAnimationInterval) {
+			clearInterval(this.cursorAnimationInterval);
+			this.cursorAnimationInterval = undefined;
 		}
+		this.editor.cursorOverride = undefined;
 	}
 
 	private cycleThinkingLevel(): void {
@@ -3441,10 +3439,9 @@ export class InteractiveMode {
 							this.loadingAnimation.stop();
 							this.loadingAnimation = undefined;
 							this.statusContainer.clear();
-							this.startBorderPulse();
+							this.startCursorAnimation();
 						} else if (!hidden) {
-							this.stopBorderPulse();
-							this.updateEditorBorderColor();
+							this.stopCursorAnimation();
 						}
 					},
 					onCollapseChangelogChange: (collapsed) => {

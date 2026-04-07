@@ -66,6 +66,9 @@ export interface EditorComponent extends Component {
 	/** Border color function */
 	borderColor?: (str: string) => string;
 
+	/** Custom cursor override (e.g. animated spinner). When set, replaces the default block cursor. */
+	cursorOverride?: string | undefined;
+
 	/** Set horizontal padding */
 	setPaddingX?(padding: number): void;
 
