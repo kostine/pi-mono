@@ -1,11 +1,14 @@
 import type { TUI } from "../tui.js";
 import { Text } from "./text.js";
 
+/** 8-dot (2×4) braille spinner frames */
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⣸", "⣰", "⣤", "⣦", "⣇", "⡇", "⠏"];
+
 /**
  * Loader component that updates every 80ms with spinning animation
  */
 export class Loader extends Text {
-	private frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+	private frames = SPINNER_FRAMES;
 	private currentFrame = 0;
 	private intervalId: NodeJS.Timeout | null = null;
 	private ui: TUI | null = null;
