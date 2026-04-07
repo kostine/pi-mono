@@ -42,6 +42,7 @@ export interface SettingsConfig {
 	currentTheme: string;
 	availableThemes: string[];
 	hideThinkingBlock: boolean;
+	hideWorkingMessage: boolean;
 	collapseChangelog: boolean;
 	doubleEscapeAction: "fork" | "tree" | "none";
 	treeFilterMode: "default" | "no-tools" | "user-only" | "labeled-only" | "all";
@@ -65,6 +66,7 @@ export interface SettingsCallbacks {
 	onThemeChange: (theme: string) => void;
 	onThemePreview?: (theme: string) => void;
 	onHideThinkingBlockChange: (hidden: boolean) => void;
+	onHideWorkingMessageChange: (hidden: boolean) => void;
 	onCollapseChangelogChange: (collapsed: boolean) => void;
 	onDoubleEscapeActionChange: (action: "fork" | "tree" | "none") => void;
 	onTreeFilterModeChange: (mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all") => void;
@@ -190,6 +192,13 @@ export class SettingsSelectorComponent extends Container {
 				label: "Hide thinking",
 				description: "Hide thinking blocks in assistant responses",
 				currentValue: config.hideThinkingBlock ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "hide-working",
+				label: "Hide working message",
+				description: "Hide the 'Working...' indicator during agent execution",
+				currentValue: config.hideWorkingMessage ? "true" : "false",
 				values: ["true", "false"],
 			},
 			{
@@ -389,6 +398,9 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "hide-thinking":
 						callbacks.onHideThinkingBlockChange(newValue === "true");
+						break;
+					case "hide-working":
+						callbacks.onHideWorkingMessageChange(newValue === "true");
 						break;
 					case "collapse-changelog":
 						callbacks.onCollapseChangelogChange(newValue === "true");

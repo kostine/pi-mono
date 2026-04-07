@@ -3334,6 +3334,7 @@ export class InteractiveMode {
 					currentTheme: this.settingsManager.getTheme() || "dark",
 					availableThemes: getAvailableThemes(),
 					hideThinkingBlock: this.hideThinkingBlock,
+					hideWorkingMessage: this.hideWorkingMessage,
 					collapseChangelog: this.settingsManager.getCollapseChangelog(),
 					doubleEscapeAction: this.settingsManager.getDoubleEscapeAction(),
 					treeFilterMode: this.settingsManager.getTreeFilterMode(),
@@ -3406,6 +3407,16 @@ export class InteractiveMode {
 						}
 						this.chatContainer.clear();
 						this.rebuildChatFromMessages();
+					},
+					onHideWorkingMessageChange: (hidden) => {
+						this.hideWorkingMessage = hidden;
+						this.settingsManager.setHideWorkingMessage(hidden);
+						if (hidden && this.loadingAnimation) {
+							this.loadingAnimation.stop();
+							this.loadingAnimation = undefined;
+							this.statusContainer.clear();
+							this.ui.requestRender();
+						}
 					},
 					onCollapseChangelogChange: (collapsed) => {
 						this.settingsManager.setCollapseChangelog(collapsed);
