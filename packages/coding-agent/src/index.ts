@@ -296,7 +296,9 @@ export { main } from "./main.js";
 export {
 	InteractiveMode,
 	type InteractiveModeOptions,
+	type MicroSection,
 	type PrintModeOptions,
+	resolveMicroSections,
 	runPrintMode,
 	runRpcMode,
 } from "./modes/index.js";

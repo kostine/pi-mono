@@ -40,7 +40,7 @@ import { SettingsManager } from "./core/settings-manager.js";
 import { printTimings, resetTimings, time } from "./core/timings.js";
 import { allTools } from "./core/tools/index.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
-import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
+import { InteractiveMode, resolveMicroSections, runPrintMode, runRpcMode } from "./modes/index.js";
 import { ExtensionSelectorComponent } from "./modes/interactive/components/extension-selector.js";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.js";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.js";
@@ -693,6 +693,8 @@ export async function main(args: string[]) {
 			initialImages,
 			initialMessages: parsed.messages,
 			verbose: parsed.verbose,
+			microSections: parsed.micro ? resolveMicroSections(parsed.microShow, parsed.microHide) : undefined,
+			socket: parsed.socket,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();

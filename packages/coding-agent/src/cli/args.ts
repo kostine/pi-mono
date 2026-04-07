@@ -42,6 +42,10 @@ export interface Args {
 	listModels?: string | true;
 	offline?: boolean;
 	verbose?: boolean;
+	micro?: boolean;
+	microShow?: string[];
+	microHide?: string[];
+	socket?: boolean;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -158,6 +162,14 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--verbose") {
 			result.verbose = true;
+		} else if (arg === "--micro") {
+			result.micro = true;
+		} else if (arg === "--micro-show" && i + 1 < args.length) {
+			result.microShow = args[++i].split(",").map((s) => s.trim());
+		} else if (arg === "--micro-hide" && i + 1 < args.length) {
+			result.microHide = args[++i].split(",").map((s) => s.trim());
+		} else if (arg === "--socket") {
+			result.socket = true;
 		} else if (arg === "--offline") {
 			result.offline = true;
 		} else if (arg.startsWith("@")) {
@@ -243,6 +255,10 @@ ${chalk.bold("Options:")}
   --list-models [search]         List available models (with optional fuzzy search)
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --offline                      Disable startup network operations (same as PI_OFFLINE=1)
+  --micro                        Compact TUI mode: hides header, chat, pending, status; keeps editor, widgets, footer
+  --micro-show <sections>        Comma-separated sections to show in micro mode (header,chat,pending,status,widget-above,editor,widget-below,footer)
+  --micro-hide <sections>        Comma-separated sections to hide in micro mode
+  --socket                       Open RPC socket alongside the TUI for programmatic control
   --help, -h                     Show this help
   --version, -v                  Show version number
 
