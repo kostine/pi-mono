@@ -194,7 +194,7 @@ export class InteractiveMode {
 	// Working message visibility state
 	private hideWorkingMessage = false;
 	private cursorAnimationInterval: NodeJS.Timeout | undefined = undefined;
-	private readonly spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+	private readonly spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⢸", "⢰", "⢤", "⢦", "⣇", "⡇", "⠏"];
 
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
