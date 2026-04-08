@@ -45,7 +45,7 @@ export interface Args {
 	micro?: boolean;
 	microShow?: string[];
 	microHide?: string[];
-	socket?: boolean;
+	socket?: boolean | string;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -169,7 +169,12 @@ export function parseArgs(args: string[]): Args {
 		} else if (arg === "--micro-hide" && i + 1 < args.length) {
 			result.microHide = args[++i].split(",").map((s) => s.trim());
 		} else if (arg === "--socket") {
-			result.socket = true;
+			// --socket or --socket <name>
+			if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+				result.socket = args[++i];
+			} else {
+				result.socket = true;
+			}
 		} else if (arg === "--offline") {
 			result.offline = true;
 		} else if (arg.startsWith("@")) {
@@ -258,7 +263,8 @@ ${chalk.bold("Options:")}
   --micro                        Compact TUI mode: hides header, chat, pending, status; keeps editor, widgets, footer
   --micro-show <sections>        Comma-separated sections to show in micro mode (header,chat,pending,status,widget-above,editor,widget-below,footer)
   --micro-hide <sections>        Comma-separated sections to hide in micro mode
-  --socket                       Open RPC socket alongside the TUI for programmatic control
+  --socket [name]                Open RPC socket alongside the TUI for programmatic control.
+                                 Optional name sets the socket filename: pi-<name>.sock
   --help, -h                     Show this help
   --version, -v                  Show version number
 

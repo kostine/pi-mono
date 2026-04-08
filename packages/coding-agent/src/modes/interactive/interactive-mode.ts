@@ -199,8 +199,8 @@ export interface InteractiveModeOptions {
 	verbose?: boolean;
 	/** Micro mode: set of visible layout sections. When defined, unlisted sections are hidden. */
 	microSections?: Set<MicroSection>;
-	/** Enable RPC socket side-channel alongside the TUI. */
-	socket?: boolean;
+	/** Enable RPC socket side-channel alongside the TUI. True for default name, string for custom name. */
+	socket?: boolean | string;
 }
 
 export class InteractiveMode {
@@ -655,7 +655,8 @@ export class InteractiveMode {
 
 		// Start RPC socket side-channel
 		if (this.options.socket) {
-			this.microSocket = startMicroSocket(this.runtimeHost);
+			const socketName = typeof this.options.socket === "string" ? this.options.socket : undefined;
+			this.microSocket = startMicroSocket(this.runtimeHost, { name: socketName });
 			process.env.PI_SOCKET = "1";
 			process.env.PI_SOCKET_PATH = this.microSocket.socketPath;
 		}

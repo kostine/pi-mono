@@ -12,6 +12,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { AgentSession } from "../../core/agent-session.js";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.js";
 import { attachJsonlLineReader, serializeJsonLine } from "../rpc/jsonl.js";
 import type {
@@ -29,14 +30,24 @@ export interface MicroSocketServer {
 	close(): void;
 }
 
+export interface MicroSocketOptions {
+	/** Custom socket name. When set, the socket file is pi-<name>.sock instead of pi-socket-<pid>.sock. */
+	name?: string;
+}
+
 /**
  * Start a unix socket server that accepts RPC commands for the given session.
  * Events from the agent are forwarded to all connected clients.
  */
-export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketServer {
-	let session = runtimeHost.session;
+export function startMicroSocket(runtimeHost: AgentSessionRuntime, options?: MicroSocketOptions): MicroSocketServer {
+	// Always access the current session through the runtime getter so we
+	// never operate on a stale/disposed session after TUI-initiated /new,
+	// /resume, or fork operations.
+	const currentSession = () => runtimeHost.session;
 
-	const socketPath = path.join(os.tmpdir(), `pi-socket-${process.pid}.sock`);
+	const socketName = options?.name;
+	const socketFile = socketName ? `pi-${socketName}.sock` : `pi-socket-${process.pid}.sock`;
+	const socketPath = path.join(os.tmpdir(), socketFile);
 
 	// Clean up stale socket file
 	try {
@@ -56,12 +67,17 @@ export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketS
 		}
 	};
 
-	// Subscribe to agent events and forward to all clients
+	// Subscribe to agent events and forward to all clients.
+	// Track the subscribed session so we can detect runtime session swaps
+	// (e.g. TUI-initiated /new or /resume) and re-subscribe automatically.
 	let unsubscribe: (() => void) | undefined;
+	let subscribedSession: AgentSession | undefined;
 
 	const subscribeToSession = () => {
+		const session = currentSession();
+		if (session === subscribedSession) return;
 		unsubscribe?.();
-		session = runtimeHost.session;
+		subscribedSession = session;
 		unsubscribe = session.subscribe((event) => {
 			broadcast(event);
 		});
@@ -92,17 +108,25 @@ export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketS
 
 	const handleCommand = async (command: RpcCommand): Promise<RpcResponse> => {
 		const id = command.id;
+		// Re-subscribe if the runtime session changed (TUI-initiated /new, /resume, fork)
+		subscribeToSession();
+		const session = currentSession();
 
 		switch (command.type) {
 			case "prompt": {
-				session
-					.prompt(command.message, {
+				// Default to "followUp" so socket prompts queue instead of
+				// rejecting when the agent is already streaming.
+				const streamingBehavior = command.streamingBehavior ?? "followUp";
+				try {
+					await session.prompt(command.message, {
 						images: command.images,
-						streamingBehavior: command.streamingBehavior,
+						streamingBehavior,
 						source: "rpc",
-					})
-					.catch((e) => broadcast(error(id, "prompt", e.message)));
-				return success(id, "prompt");
+					});
+					return success(id, "prompt");
+				} catch (e) {
+					return error(id, "prompt", e instanceof Error ? e.message : String(e));
+				}
 			}
 
 			case "steer": {
@@ -123,9 +147,7 @@ export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketS
 			case "new_session": {
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const result = await runtimeHost.newSession(options);
-				if (!result.cancelled) {
-					subscribeToSession();
-				}
+				subscribeToSession();
 				return success(id, "new_session", result);
 			}
 
@@ -229,17 +251,13 @@ export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketS
 
 			case "switch_session": {
 				const result = await runtimeHost.switchSession(command.sessionPath);
-				if (!result.cancelled) {
-					subscribeToSession();
-				}
+				subscribeToSession();
 				return success(id, "switch_session", result);
 			}
 
 			case "fork": {
 				const result = await runtimeHost.fork(command.entryId);
-				if (!result.cancelled) {
-					subscribeToSession();
-				}
+				subscribeToSession();
 				return success(id, "fork", { text: result.selectedText, cancelled: result.cancelled });
 			}
 
@@ -377,10 +395,19 @@ export function startMicroSocket(runtimeHost: AgentSessionRuntime): MicroSocketS
 	server.listen(socketPath);
 
 	// Write discovery file so other agents can find the socket
-	const discoveryPath = path.join(os.tmpdir(), `pi-socket-${process.pid}.json`);
+	const discoveryFile = socketName ? `pi-${socketName}.json` : `pi-socket-${process.pid}.json`;
+	const discoveryPath = path.join(os.tmpdir(), discoveryFile);
+	const session = currentSession();
 	fs.writeFileSync(
 		discoveryPath,
-		JSON.stringify({ pid: process.pid, socketPath, startedAt: new Date().toISOString() }),
+		JSON.stringify({
+			pid: process.pid,
+			name: socketName ?? null,
+			socketPath,
+			cwd: process.cwd(),
+			sessionName: session.sessionName ?? null,
+			startedAt: new Date().toISOString(),
+		}),
 	);
 
 	return {
