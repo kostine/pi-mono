@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Named sockets: `--socket <name>` creates `pi-<name>.sock` instead of pid-based names for easy discovery
+- Event notifications: `--notify <socket_path>` pushes filtered session events to an external socket, with `--notify-events` to select categories (`agent`, `turn`, `message`, `tool`, `error`, `compaction`, `all`)
+- Socket discovery files now include `name`, `cwd`, and `sessionName` for identification
+
+### Fixed
+
+- Fixed RPC socket stale session reference after TUI-initiated `/new`, `/resume`, or fork
+- Fixed RPC socket prompt handler returning false success before async completion
+- Socket prompts now default to `streamingBehavior: "followUp"` so they queue instead of rejecting when the agent is busy
+
 ## [0.65.2] - 2026-04-06
 
 ## [0.65.1] - 2026-04-05

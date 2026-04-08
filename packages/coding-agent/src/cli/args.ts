@@ -46,6 +46,8 @@ export interface Args {
 	microShow?: string[];
 	microHide?: string[];
 	socket?: boolean | string;
+	notify?: string;
+	notifyEvents?: string[];
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -175,6 +177,10 @@ export function parseArgs(args: string[]): Args {
 			} else {
 				result.socket = true;
 			}
+		} else if (arg === "--notify" && i + 1 < args.length) {
+			result.notify = args[++i];
+		} else if (arg === "--notify-events" && i + 1 < args.length) {
+			result.notifyEvents = args[++i].split(",").map((s) => s.trim());
 		} else if (arg === "--offline") {
 			result.offline = true;
 		} else if (arg.startsWith("@")) {
@@ -265,6 +271,9 @@ ${chalk.bold("Options:")}
   --micro-hide <sections>        Comma-separated sections to hide in micro mode
   --socket [name]                Open RPC socket alongside the TUI for programmatic control.
                                  Optional name sets the socket filename: pi-<name>.sock
+  --notify <socket_path>         Push event notifications to an external Unix socket
+  --notify-events <events>       Comma-separated event categories to push (default: all)
+                                 Categories: agent, turn, message, tool, error, compaction, all
   --help, -h                     Show this help
   --version, -v                  Show version number
 

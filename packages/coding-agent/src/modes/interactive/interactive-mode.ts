@@ -100,6 +100,12 @@ import { UserMessageComponent } from "./components/user-message.js";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.js";
 import { type MicroSocketServer, startMicroSocket } from "./micro-socket.js";
 import {
+	isValidNotifyCategory,
+	type NotifyCategory,
+	type NotifySocketHandle,
+	startNotifySocket,
+} from "./notify-socket.js";
+import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
 	getEditorTheme,
@@ -201,6 +207,10 @@ export interface InteractiveModeOptions {
 	microSections?: Set<MicroSection>;
 	/** Enable RPC socket side-channel alongside the TUI. True for default name, string for custom name. */
 	socket?: boolean | string;
+	/** Target socket path for outbound event notifications. */
+	notify?: string;
+	/** Event categories to push via notify (default: all). */
+	notifyEvents?: string[];
 }
 
 export class InteractiveMode {
@@ -311,6 +321,9 @@ export class InteractiveMode {
 
 	// Micro mode socket server for RPC side-channel
 	private microSocket: MicroSocketServer | undefined = undefined;
+
+	// Outbound notification socket
+	private notifySocket: NotifySocketHandle | undefined = undefined;
 
 	/** Returns true if a layout section is visible (always true in normal mode). */
 	private isSectionVisible(section: MicroSection): boolean {
@@ -659,6 +672,25 @@ export class InteractiveMode {
 			this.microSocket = startMicroSocket(this.runtimeHost, { name: socketName });
 			process.env.PI_SOCKET = "1";
 			process.env.PI_SOCKET_PATH = this.microSocket.socketPath;
+		}
+
+		// Start outbound notification socket
+		if (this.options.notify) {
+			const categories: NotifyCategory[] = [];
+			if (this.options.notifyEvents?.length) {
+				for (const e of this.options.notifyEvents) {
+					if (isValidNotifyCategory(e)) {
+						categories.push(e);
+					}
+				}
+			}
+			if (categories.length === 0) {
+				categories.push("all");
+			}
+			this.notifySocket = startNotifySocket(this.runtimeHost, {
+				targetSocketPath: this.options.notify,
+				categories,
+			});
 		}
 
 		// Initialize available provider count for footer display
@@ -4833,6 +4865,10 @@ export class InteractiveMode {
 		if (this.microSocket) {
 			this.microSocket.close();
 			this.microSocket = undefined;
+		}
+		if (this.notifySocket) {
+			this.notifySocket.close();
+			this.notifySocket = undefined;
 		}
 		if (this.isInitialized) {
 			this.ui.stop();

@@ -695,6 +695,8 @@ export async function main(args: string[]) {
 			verbose: parsed.verbose,
 			microSections: parsed.micro ? resolveMicroSections(parsed.microShow, parsed.microHide) : undefined,
 			socket: parsed.socket,
+			notify: parsed.notify,
+			notifyEvents: parsed.notifyEvents,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();

@@ -483,42 +483,78 @@ pi --micro --micro-show chat,status --micro-hide editor
 The `--socket` flag opens a unix socket alongside the TUI that accepts the full [RPC protocol](docs/rpc.md). This gives you structured programmatic control while the TUI renders visually in the pane. It works with or without `--micro`.
 
 ```bash
-pi --socket              # full TUI + programmatic control
+pi --socket              # full TUI + programmatic control (pid-based socket name)
+pi --socket pm           # named socket: pi-pm.sock
 pi --micro --socket      # compact TUI + programmatic control
 pi --micro               # compact TUI, send-keys only
 ```
 
-The socket path is written to a discovery file at `/tmp/pi-socket-<pid>.json`:
+The socket path is written to a discovery file in `$TMPDIR`. Named sockets use `pi-<name>.json`, pid-based sockets use `pi-socket-<pid>.json`:
 
 ```json
-{"pid": 12345, "socketPath": "/tmp/pi-socket-12345.sock", "startedAt": "2026-04-07T..."}
+{"pid": 12345, "name": "pm", "socketPath": "/tmp/pi-pm.sock", "cwd": "/home/user/project", "sessionName": null, "startedAt": "2026-04-07T..."}
 ```
 
 Send commands using any unix socket client:
 
 ```bash
-# Get current state
-echo '{"type":"get_state"}' | nc -U /tmp/pi-socket-12345.sock
+# Named socket — easy to remember
+echo '{"type":"get_state"}' | nc -U ${TMPDIR}pi-pm.sock -w 2
 
-# Send a prompt
-echo '{"type":"prompt","message":"fix the build"}' | nc -U /tmp/pi-socket-12345.sock
+# Send a prompt (queues as followUp if agent is busy)
+echo '{"type":"prompt","message":"fix the build"}' | nc -U ${TMPDIR}pi-pm.sock -w 15
 
 # Abort current operation
-echo '{"type":"abort"}' | nc -U /tmp/pi-socket-12345.sock
+echo '{"type":"abort"}' | nc -U ${TMPDIR}pi-pm.sock -w 2
 ```
 
 From Node.js:
 
 ```javascript
 const net = require('net');
-const sock = net.connect('/tmp/pi-socket-12345.sock');
+const sock = net.connect(process.env.TMPDIR + 'pi-pm.sock');
 sock.write(JSON.stringify({ type: 'prompt', message: 'fix the build' }) + '\n');
 sock.on('data', (chunk) => {
   // Receives RPC responses and agent events as JSONL
 });
 ```
 
-All RPC commands work over the socket: `prompt`, `steer`, `follow_up`, `abort`, `get_state`, `get_messages`, `set_model`, `compact`, and more. Agent events (streaming, tool execution, completion) are broadcast to all connected clients. See [docs/rpc.md](docs/rpc.md) for the full protocol.
+All RPC commands work over the socket: `prompt`, `steer`, `follow_up`, `abort`, `get_state`, `get_messages`, `set_model`, `compact`, and more. Agent events (streaming, tool execution, completion) are broadcast to all connected clients. Prompts sent via the socket default to `streamingBehavior: "followUp"` so they queue instead of rejecting when the agent is busy. See [docs/rpc.md](docs/rpc.md) for the full protocol.
+
+### Event Notifications
+
+The `--notify` flag makes pi push event notifications to an external Unix socket. This enables a "report back" pattern where sub-agents push status to a PM agent's socket:
+
+```bash
+# Push all events to the PM's socket
+pi --socket worker1 --notify ${TMPDIR}pi-pm.sock
+
+# Push only tool completions and errors
+pi --socket worker1 --notify ${TMPDIR}pi-pm.sock --notify-events tool,error
+
+# Push agent lifecycle and tool events
+pi --notify ${TMPDIR}pi-pm.sock --notify-events agent,tool
+```
+
+Available event categories:
+
+| Category | Events |
+|----------|--------|
+| `agent` | `agent_start`, `agent_end` |
+| `turn` | `turn_start`, `turn_end` |
+| `message` | `message_start`, `message_end` |
+| `tool` | `tool_execution_start`, `tool_execution_end` |
+| `error` | `auto_retry_start`, `auto_retry_end`, tool errors |
+| `compaction` | `compaction_start`, `compaction_end` |
+| `all` | Every event (default) |
+
+Notifications arrive as JSONL wrapped with the sender's PID:
+
+```json
+{"type":"notify","pid":12345,"event":{"type":"agent_end","messages":[...]}}
+```
+
+The connection auto-reconnects on disconnect with exponential backoff.
 
 #### Discovery from Extensions
 
