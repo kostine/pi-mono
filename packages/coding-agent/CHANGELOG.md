@@ -6,6 +6,7 @@
 
 - Named sockets: `--socket <name>` creates `pi-<name>.sock` instead of pid-based names for easy discovery
 - Event notifications: `--notify <socket_path>` pushes filtered session events to an external socket, with `--notify-events` to select categories (`agent`, `turn`, `message`, `tool`, `error`, `compaction`, `all`)
+- Notification delivery modes: `--notify-deliver event` (raw JSONL) or `--notify-deliver follow` (injects messages into receiving agent's chat via RPC follow_up)
 - Socket discovery files now include `name`, `cwd`, and `sessionName` for identification
 
 ### Fixed

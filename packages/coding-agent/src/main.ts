@@ -697,6 +697,7 @@ export async function main(args: string[]) {
 			socket: parsed.socket,
 			notify: parsed.notify,
 			notifyEvents: parsed.notifyEvents,
+			notifyDeliver: parsed.notifyDeliver,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();

@@ -101,7 +101,9 @@ import { UserMessageSelectorComponent } from "./components/user-message-selector
 import { type MicroSocketServer, startMicroSocket } from "./micro-socket.js";
 import {
 	isValidNotifyCategory,
+	isValidNotifyDeliver,
 	type NotifyCategory,
+	type NotifyDeliver,
 	type NotifySocketHandle,
 	startNotifySocket,
 } from "./notify-socket.js";
@@ -211,6 +213,8 @@ export interface InteractiveModeOptions {
 	notify?: string;
 	/** Event categories to push via notify (default: all). */
 	notifyEvents?: string[];
+	/** Delivery mode for notify: "event" (raw JSONL) or "follow" (RPC follow_up). */
+	notifyDeliver?: string;
 }
 
 export class InteractiveMode {
@@ -687,9 +691,14 @@ export class InteractiveMode {
 			if (categories.length === 0) {
 				categories.push("all");
 			}
+			let deliver: NotifyDeliver = "event";
+			if (this.options.notifyDeliver && isValidNotifyDeliver(this.options.notifyDeliver)) {
+				deliver = this.options.notifyDeliver;
+			}
 			this.notifySocket = startNotifySocket(this.runtimeHost, {
 				targetSocketPath: this.options.notify,
 				categories,
+				deliver,
 			});
 		}
 

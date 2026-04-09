@@ -591,10 +591,28 @@ These events can interleave at any time:
 
 #### Notification Format
 
-Notifications arrive as JSONL wrapped with the sender's PID:
+Two delivery modes via `--notify-deliver`:
+
+**`event` (default)** — raw JSONL events wrapped with the sender's PID:
 
 ```json
 {"type":"notify","pid":12345,"event":{"type":"agent_end","messages":[...]}}
+```
+
+**`follow`** — formatted as RPC `follow_up` commands, injecting messages into the receiving agent's conversation. This lets a PM agent react to sub-agent events without actively polling:
+
+```bash
+# Sub-agent sends agent_end as a follow_up to PM's socket
+pi --socket worker1 --notify ${TMPDIR}pi-pm.sock --notify-deliver follow --notify-events agent,tool,error
+```
+
+The receiving agent sees messages like:
+
+```
+[notify] agent started
+[notify] tool started: bash
+[notify] tool completed: bash
+[notify] agent finished (5 messages)
 ```
 
 The connection auto-reconnects on disconnect with exponential backoff.
