@@ -256,10 +256,13 @@ export function startNotifySocket(runtimeHost: AgentSessionRuntime, options: Not
 			const message = formatEventMessage(name, event);
 			// Skip empty messages (noisy events like message_update)
 			if (!message) return;
+			// Use prompt with streamingBehavior so it delivers when the
+			// receiving agent is idle (prompt) or queues when busy (followUp)
 			send({
-				type: "follow_up",
+				type: "prompt",
 				id: `notify-${process.pid}-${notifyId++}`,
 				message,
+				streamingBehavior: "followUp",
 			});
 		} else {
 			send({
