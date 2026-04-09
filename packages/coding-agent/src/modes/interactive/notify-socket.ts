@@ -53,7 +53,7 @@ const CATEGORY_EVENT_TYPES: Record<Exclude<NotifyCategory, "all">, Set<string>> 
 	compaction: new Set(["compaction_start", "compaction_end"]),
 };
 
-function buildEventFilter(categories: NotifyCategory[]): (event: AgentSessionEvent) => boolean {
+function buildEventFilter(categories: string[]): (event: AgentSessionEvent) => boolean {
 	if (categories.includes("all")) {
 		return () => true;
 	}
@@ -65,6 +65,9 @@ function buildEventFilter(categories: NotifyCategory[]): (event: AgentSessionEve
 			for (const t of types) {
 				allowedTypes.add(t);
 			}
+		} else {
+			// Not a category name — treat as a raw event type (e.g. "agent_end")
+			allowedTypes.add(cat);
 		}
 	}
 
@@ -188,8 +191,8 @@ export interface NotifySocketHandle {
 export interface NotifySocketOptions {
 	/** Path to the target Unix socket to push events to */
 	targetSocketPath: string;
-	/** Event categories to send */
-	categories: NotifyCategory[];
+	/** Event categories or raw event type names to send */
+	categories: string[];
 	/** Delivery mode: "event" sends raw JSONL, "follow" sends RPC follow_up commands */
 	deliver?: NotifyDeliver;
 	/** Sender name included in notifications. Default: PID */

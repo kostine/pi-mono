@@ -278,8 +278,9 @@ ${chalk.bold("Options:")}
   --socket [name]                Open RPC socket alongside the TUI for programmatic control.
                                  Optional name sets the socket filename: pi-<name>.sock
   --notify <socket_path>         Push event notifications to an external Unix socket
-  --notify-events <events>       Comma-separated event categories to push (default: all)
+  --notify-events <events>       Comma-separated event categories or raw event types (default: all)
                                  Categories: agent, turn, message, tool, error, compaction, all
+                                 Raw types: agent_start, agent_end, turn_start, turn_end, etc.
   --notify-deliver <mode>        Delivery mode: event (raw JSONL) or follow (RPC follow_up)
                                  Default: event. follow injects messages into receiving agent's chat
   --notify-name <name>           Sender name included in notifications (default: socket name or PID)

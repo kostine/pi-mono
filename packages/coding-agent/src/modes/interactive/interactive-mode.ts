@@ -102,7 +102,6 @@ import { type MicroSocketServer, startMicroSocket } from "./micro-socket.js";
 import {
 	isValidNotifyCategory,
 	isValidNotifyDeliver,
-	type NotifyCategory,
 	type NotifyDeliver,
 	type NotifySocketHandle,
 	startNotifySocket,
@@ -682,10 +681,13 @@ export class InteractiveMode {
 
 		// Start outbound notification socket
 		if (this.options.notify) {
-			const categories: NotifyCategory[] = [];
+			const categories: string[] = [];
 			if (this.options.notifyEvents?.length) {
 				for (const e of this.options.notifyEvents) {
 					if (isValidNotifyCategory(e)) {
+						categories.push(e);
+					} else {
+						// Treat as raw event type name (e.g. "agent_end", "tool_execution_end")
 						categories.push(e);
 					}
 				}
