@@ -215,6 +215,8 @@ export interface InteractiveModeOptions {
 	notifyEvents?: string[];
 	/** Delivery mode for notify: "event" (raw JSONL) or "follow" (RPC follow_up). */
 	notifyDeliver?: string;
+	/** Sender name included in notifications. */
+	notifyName?: string;
 }
 
 export class InteractiveMode {
@@ -695,10 +697,15 @@ export class InteractiveMode {
 			if (this.options.notifyDeliver && isValidNotifyDeliver(this.options.notifyDeliver)) {
 				deliver = this.options.notifyDeliver;
 			}
+			// Default name to socket name, then PID
+			const notifyName =
+				this.options.notifyName ??
+				(typeof this.options.socket === "string" ? this.options.socket : `${process.pid}`);
 			this.notifySocket = startNotifySocket(this.runtimeHost, {
 				targetSocketPath: this.options.notify,
 				categories,
 				deliver,
+				name: notifyName,
 			});
 		}
 

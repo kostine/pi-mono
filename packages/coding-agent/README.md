@@ -609,10 +609,10 @@ pi --socket worker1 --notify ${TMPDIR}pi-pm.sock --notify-deliver follow --notif
 The receiving agent sees messages like:
 
 ```
-[notify] agent started
-[notify] tool started: bash
-[notify] tool completed: bash
-[notify] agent finished (5 messages)
+[notify:worker1] agent started
+[notify:worker1] tool started: bash
+[notify:worker1] tool completed: bash
+[notify:worker1] agent finished (5 messages)
 ```
 
 The connection auto-reconnects on disconnect with exponential backoff.

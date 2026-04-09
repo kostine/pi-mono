@@ -81,28 +81,28 @@ function buildEventFilter(categories: NotifyCategory[]): (event: AgentSessionEve
 /**
  * Format an event as a human-readable summary for follow_up delivery.
  */
-function formatEventMessage(event: AgentSessionEvent): string {
+function formatEventMessage(name: string, event: AgentSessionEvent): string {
 	switch (event.type) {
 		case "agent_start":
-			return "[notify] agent started";
+			return `[notify:${name}] agent started`;
 
 		case "agent_end": {
 			const msgs = event.messages;
 			const msgCount = msgs.length;
-			return `[notify] agent finished (${msgCount} messages)`;
+			return `[notify:${name}] agent finished (${msgCount} messages)`;
 		}
 
 		case "turn_start":
-			return "[notify] turn started";
+			return `[notify:${name}] turn started`;
 
 		case "turn_end": {
 			const msg = event.message as AssistantMessage;
 			const toolCount = event.toolResults?.length ?? 0;
 			const stopReason = msg.stopReason ?? "unknown";
 			if (toolCount > 0) {
-				return `[notify] turn ended (${stopReason}, ${toolCount} tool call${toolCount > 1 ? "s" : ""})`;
+				return `[notify:${name}] turn ended (${stopReason}, ${toolCount} tool call${toolCount > 1 ? "s" : ""})`;
 			}
-			return `[notify] turn ended (${stopReason})`;
+			return `[notify:${name}] turn ended (${stopReason})`;
 		}
 
 		case "message_start": {
@@ -110,9 +110,9 @@ function formatEventMessage(event: AgentSessionEvent): string {
 			if (role === "user") {
 				const text = extractText(event.message.content);
 				const preview = text.length > 100 ? `${text.slice(0, 100)}...` : text;
-				return `[notify] user message: ${preview}`;
+				return `[notify:${name}] user message: ${preview}`;
 			}
-			return `[notify] ${role} message started`;
+			return `[notify:${name}] ${role} message started`;
 		}
 
 		case "message_end": {
@@ -122,9 +122,9 @@ function formatEventMessage(event: AgentSessionEvent): string {
 				const text = extractText(msg.content);
 				const preview = text.length > 200 ? `${text.slice(0, 200)}...` : text;
 				const stopReason = msg.stopReason ?? "unknown";
-				return `[notify] assistant (${stopReason}): ${preview}`;
+				return `[notify:${name}] assistant (${stopReason}): ${preview}`;
 			}
-			return `[notify] ${role} message ended`;
+			return `[notify:${name}] ${role} message ended`;
 		}
 
 		case "message_update": {
@@ -132,36 +132,39 @@ function formatEventMessage(event: AgentSessionEvent): string {
 		}
 
 		case "tool_execution_start":
-			return `[notify] tool started: ${event.toolName}`;
+			return `[notify:${name}] tool started: ${event.toolName}`;
 
 		case "tool_execution_update":
 			return ""; // too noisy, skip
 
 		case "tool_execution_end": {
 			const status = event.isError ? "failed" : "completed";
-			return `[notify] tool ${status}: ${event.toolName}`;
+			return `[notify:${name}] tool ${status}: ${event.toolName}`;
 		}
 
 		case "queue_update":
 			return ""; // too noisy, skip
 
 		case "compaction_start":
-			return `[notify] compaction started (${event.reason})`;
+			return `[notify:${name}] compaction started (${event.reason})`;
 
 		case "compaction_end": {
-			if (event.aborted) return `[notify] compaction aborted`;
-			if (event.willRetry) return `[notify] compaction failed, will retry: ${event.errorMessage ?? "unknown"}`;
-			return `[notify] compaction done (${event.reason})`;
+			if (event.aborted) return `[notify:${name}] compaction aborted`;
+			if (event.willRetry)
+				return `[notify:${name}] compaction failed, will retry: ${event.errorMessage ?? "unknown"}`;
+			return `[notify:${name}] compaction done (${event.reason})`;
 		}
 
 		case "auto_retry_start":
-			return `[notify] retry ${event.attempt}/${event.maxAttempts} in ${event.delayMs}ms: ${event.errorMessage}`;
+			return `[notify:${name}] retry ${event.attempt}/${event.maxAttempts} in ${event.delayMs}ms: ${event.errorMessage}`;
 
 		case "auto_retry_end":
-			return event.success ? "[notify] retry succeeded" : `[notify] retry failed: ${event.finalError ?? "unknown"}`;
+			return event.success
+				? `[notify:${name}] retry succeeded`
+				: `[notify:${name}] retry failed: ${event.finalError ?? "unknown"}`;
 
 		default:
-			return `[notify] ${(event as { type: string }).type}`;
+			return `[notify:${name}] ${(event as { type: string }).type}`;
 	}
 }
 
@@ -189,6 +192,8 @@ export interface NotifySocketOptions {
 	categories: NotifyCategory[];
 	/** Delivery mode: "event" sends raw JSONL, "follow" sends RPC follow_up commands */
 	deliver?: NotifyDeliver;
+	/** Sender name included in notifications. Default: PID */
+	name?: string;
 }
 
 /**
@@ -201,7 +206,7 @@ export interface NotifySocketOptions {
  * Reconnects on disconnect with exponential backoff.
  */
 export function startNotifySocket(runtimeHost: AgentSessionRuntime, options: NotifySocketOptions): NotifySocketHandle {
-	const { targetSocketPath, categories, deliver = "event" } = options;
+	const { targetSocketPath, categories, deliver = "event", name = `${process.pid}` } = options;
 	const filter = buildEventFilter(categories);
 
 	let socket: net.Socket | undefined;
@@ -248,7 +253,7 @@ export function startNotifySocket(runtimeHost: AgentSessionRuntime, options: Not
 		if (!filter(event)) return;
 
 		if (deliver === "follow") {
-			const message = formatEventMessage(event);
+			const message = formatEventMessage(name, event);
 			// Skip empty messages (noisy events like message_update)
 			if (!message) return;
 			send({
@@ -260,6 +265,7 @@ export function startNotifySocket(runtimeHost: AgentSessionRuntime, options: Not
 			send({
 				type: "notify",
 				pid: process.pid,
+				name,
 				event,
 			});
 		}

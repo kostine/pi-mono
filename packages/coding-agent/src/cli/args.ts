@@ -49,6 +49,7 @@ export interface Args {
 	notify?: string;
 	notifyEvents?: string[];
 	notifyDeliver?: string;
+	notifyName?: string;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -184,6 +185,8 @@ export function parseArgs(args: string[]): Args {
 			result.notifyEvents = args[++i].split(",").map((s) => s.trim());
 		} else if (arg === "--notify-deliver" && i + 1 < args.length) {
 			result.notifyDeliver = args[++i];
+		} else if (arg === "--notify-name" && i + 1 < args.length) {
+			result.notifyName = args[++i];
 		} else if (arg === "--offline") {
 			result.offline = true;
 		} else if (arg.startsWith("@")) {
@@ -279,6 +282,7 @@ ${chalk.bold("Options:")}
                                  Categories: agent, turn, message, tool, error, compaction, all
   --notify-deliver <mode>        Delivery mode: event (raw JSONL) or follow (RPC follow_up)
                                  Default: event. follow injects messages into receiving agent's chat
+  --notify-name <name>           Sender name included in notifications (default: socket name or PID)
   --help, -h                     Show this help
   --version, -v                  Show version number
 
