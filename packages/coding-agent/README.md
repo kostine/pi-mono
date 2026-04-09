@@ -546,7 +546,50 @@ Available event categories:
 | `tool` | `tool_execution_start`, `tool_execution_end` |
 | `error` | `auto_retry_start`, `auto_retry_end`, tool errors |
 | `compaction` | `compaction_start`, `compaction_end` |
-| `all` | Every event (default) |
+| `all` | Every event, including high-frequency streaming events |
+
+For monitoring sub-agents, `--notify-events agent,tool,error` is a good default — you see when agents start/finish, which tools they run, and any failures.
+
+#### Event Lifecycle
+
+Events fire in this order during prompt processing:
+
+```
+User sends prompt
+|├─ agent_start                     Agent begins processing a prompt
+|├─ message_start (user)            User message added to conversation
+|├─ turn_start                      One LLM call begins
+|   ├─ message_start (assistant)     Assistant starts streaming
+|   ├─ message_update               Streaming chunks (high volume)
+|   |
+|   ├─ tool_execution_start         Tool call parsed, execution begins
+|   ├─ tool_execution_update        Tool running, partial output (high volume)
+|   ├─ tool_execution_end           Tool finished (result or error)
+|   |
+|   ├─ message_end (assistant)      Assistant message complete
+|   ├─ message_start (toolResult)   Tool result added to conversation
+|   └─ turn_end                      Turn complete (message + tool results)
+|
+|   ... more turns if tools were called (LLM gets called again)
+|
+├─ message_end (user)               User message finalized
+└─ agent_end                         Entire prompt processing done
+
+These events can interleave at any time:
+
+├─ queue_update                     Steering/followUp queue changed
+├─ auto_retry_start                 LLM call failed, retry scheduled
+├─ auto_retry_end                   Retry succeeded or gave up
+├─ compaction_start                 Context compaction starting
+└─ compaction_end                   Context compaction done
+```
+
+- `agent_start` → `agent_end` wraps the entire processing of one user prompt
+- A single agent turn may produce multiple turns (LLM call → tool calls → LLM call → ...)
+- `message_update` and `tool_execution_update` are high-frequency streaming events; use `all` category with caution
+- `tool_execution_end` includes an `isError` field for detecting failures
+
+#### Notification Format
 
 Notifications arrive as JSONL wrapped with the sender's PID:
 
